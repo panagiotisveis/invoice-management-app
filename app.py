@@ -131,7 +131,7 @@ if not st.session_state.authenticated:
     
     pwd = st.text_input("Κωδικός Πρόσβασης", type="password")
     if st.button("Είσοδος", type="primary", use_container_width=True):
-        if pwd == "worldwide2026":
+        if pwd == st.secrets["APP_PASSWORD"]:
             st.session_state.authenticated = True
             st.rerun()
         else:
