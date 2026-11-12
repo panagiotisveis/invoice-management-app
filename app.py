@@ -7,6 +7,19 @@ from datetime import datetime, date
 st.set_page_config(page_title="Worldwide Αξεσουάρ", layout="centered")
 
 # --- CUSTOM CSS ---
+
+st.markdown("""
+<style>
+/* Κρύβει το εικονίδιο / banner του Streamlit κάτω δεξιά */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+.stDeployButton {display:none;}
+
+/* Κρύβει την επάνω μπάρα (Fork, GitHub icons) */
+header {visibility: hidden;}
+</style>
+""", unsafe_allow_html=True)
+
 st.markdown("""
 <style>
 button {
