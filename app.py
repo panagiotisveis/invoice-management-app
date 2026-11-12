@@ -10,20 +10,21 @@ st.set_page_config(page_title="Worldwide Αξεσουάρ", layout="centered")
 
 st.markdown("""
 <style>
-/* Κρύβει εντελώς το μενού και τα εικονίδια του Streamlit */
+/* Απόκρυψη μενού, header και footer του Streamlit */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
-.stDeployButton {display: none;}
+.stDeployButton {display: none !important;}
 
-/* Κρύβει το αιωρούμενο κουμπί/εικονίδιο κάτω δεξιά (Manage app / Viewer badge) */
-div[data-testid="stStatusWidget"] {
+/* Απόκρυψη του εικονιδίου/badge κάτω δεξιά */
+[data-testid="stStatusWidget"] {
     display: none !important;
 }
-div.viewerBadge_container__1QSob {
+.viewerBadge_container__1QSob, 
+iframe[title="Streamlit status widget"] {
     display: none !important;
 }
-.viewerBadge_link__1S137 {
+footer::after {
     display: none !important;
 }
 </style>
