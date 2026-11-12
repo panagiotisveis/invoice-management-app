@@ -100,9 +100,11 @@ def load_sessions():
         
         df['Κατάσταση Πληρωμής'] = df['Κατάσταση Πληρωμής'].replace({
             'Εκκρεμεί': '🔴 Εκκρεμεί',
-            'Εκκρεμεί (Εκτός / Δώρο)': '🟠 Εκκρεμεί (Εκτός / Δώρο)',
+            'Εκκρεμεί (Εκτός / Δώρο)': '🟠 Εκκρεμεί (Promo / Pro Bono)',
+            '🟠 Εκκρεμεί (Εκτός / Δώρο)': '🟠 Εκκρεμεί (Promo / Pro Bono)',
             'Εξοφλήθηκε': '🟢 Εξοφλήθηκε',
-            'Εξοφλήθηκε (Εκτός / Δώρο)': '🟣 Εξοφλήθηκε (Εκτός / Δώρο)'
+            'Εξοφλήθηκε (Εκτός / Δώρο)': '🟣 Ολοκληρώθηκε (Promo / Pro Bono)',
+            '🟣 Εξοφλήθηκε (Εκτός / Δώρο)': '🟣 Ολοκληρώθηκε (Promo / Pro Bono)'
         })
         df['Κατάσταση Πληρωμής'] = df['Κατάσταση Πληρωμής'].apply(lambda x: x if pd.isna(x) else str(x).replace('🔴 🔴', '🔴').replace('🟠 🟠', '🟠').replace('🟢 🟢', '🟢').replace('🟣 🟣', '🟣'))
         
@@ -129,8 +131,7 @@ if not st.session_state.authenticated:
     
     pwd = st.text_input("Κωδικός Πρόσβασης", type="password")
     if st.button("Είσοδος", type="primary", use_container_width=True):
-        # Τραβάει τον κωδικό κρυφά από το Streamlit Cloud
-        if pwd == st.secrets["APP_PASSWORD"]:
+        if pwd == "worldwide2026":
             st.session_state.authenticated = True
             st.rerun()
         else:
@@ -183,7 +184,7 @@ def view_receipt_dialog(filepath):
         with open(filepath, "rb") as f:
             st.download_button("📥 Λήψη Αρχείου", f.read(), file_name=os.path.basename(filepath), type="primary", use_container_width=True)
 
-@st.dialog("⚠️ Επιβεβαίωση Έκδοσης Απόδειξης")
+@st.dialog("⚠️ Επιβεβαίωση Έκδοσης Απόδειξης (Συνοπτική)")
 def confirm_issue_invoice_dialog(selected_indices, app_name, total_amt):
     df_inv = load_invoices()
     df_s = load_sessions()
@@ -235,7 +236,6 @@ def confirm_issue_invoice_dialog(selected_indices, app_name, total_amt):
         dates_list = df_s.loc[selected_indices, "Ημερομηνία"].tolist()
         qty = len(dates_list)
         
-        # Μορφοποίηση ημερομηνιών σε "κουτάκια" (badges)
         dates_html = ""
         for d in dates_list:
             dates_html += f'<span style="display: inline-block; background-color: #e9ecef; border-radius: 4px; padding: 2px 6px; margin: 2px 4px 2px 0; font-size: 11px; color: #495057; border: 1px solid #dee2e6;">{d}</span>'
@@ -258,7 +258,6 @@ def confirm_issue_invoice_dialog(selected_indices, app_name, total_amt):
         
         addr_html = f"{address}<br>" if address else ""
         
-        # Λογική συγχώνευσης τηλεφώνων και emails
         contact_info = []
         if tel1 and tel2: contact_info.append(f"Tél: {tel1} | {tel2}")
         elif tel1: contact_info.append(f"Tél: {tel1}")
@@ -500,7 +499,7 @@ def add_client_dialog():
             
     else: # 👦 Παιδί / Μαθητής
         app_name = st.text_input("Όνομα στην Εφαρμογή")
-        child_name = st.text_input("Όνομα Παιδιού")
+        child_name = st.text_input("Όνομα Παιδιού / Μαθητή")
         
         st.markdown("##### 📍 Στοιχεία Τιμολόγησης")
         parent1 = st.text_input("Όνομα Γονέα 1 *")
@@ -614,12 +613,12 @@ def quick_add_session_dialog():
                 payment_base = st.selectbox("Πληρωμή", ["🔴 Εκκρεμεί", "🟢 Εξοφλήθηκε"], index=0)
                 
             with st.container(border=True):
-                st.markdown("<h6 style='color: #ff9800; margin-bottom: 5px;'>🟠 Εκτός / Δώρο</h6>", unsafe_allow_html=True)
-                is_gift = st.checkbox("Να σημειωθεί η συνεδρία εκτός αποδείξεων")
+                st.markdown("<h6 style='color: #ff9800; margin-bottom: 5px;'>🟠 Promo / Pro Bono</h6>", unsafe_allow_html=True)
+                is_gift = st.checkbox("Καταχώρηση ως δωρεάν παροχή (δεν τιμολογείται)")
                 
             if is_gift:
-                if "Εκκρεμεί" in payment_base: payment = "🟠 Εκκρεμεί (Εκτός / Δώρο)"
-                else: payment = "🟣 Εξοφλήθηκε (Εκτός / Δώρο)"
+                if "Εκκρεμεί" in payment_base: payment = "🟠 Εκκρεμεί (Promo / Pro Bono)"
+                else: payment = "🟣 Ολοκληρώθηκε (Promo / Pro Bono)"
             else:
                 payment = payment_base
             
@@ -756,7 +755,7 @@ def show_home_page():
                             st.download_button("📄 Λήψη", data=html_data, file_name=f"Invoice_{row['Όνομα Απόδειξης']}_{row['ID Απόδειξης']}.html", mime="text/html", key=f"dl_home_{row['ID Απόδειξης']}", use_container_width=True)
     
     st.write("---")
-    st.subheader("🔴 Εκκρεμείς Συνεδρίες (Επίσημες & Εκτός)")
+    st.subheader("🔴 Εκκρεμείς Συνεδρίες (Επίσημες & Promo)")
     df_s = load_sessions()
     
     if df_s.empty: st.info("Δεν έχουν καταχωρηθεί συνεδρίες ακόμα.")
@@ -1156,12 +1155,12 @@ def show_client_profile():
                     payment_base = st.selectbox("Πληρωμή", ["🔴 Εκκρεμεί", "🟢 Εξοφλήθηκε"], index=0)
                     
                 with st.container(border=True):
-                    st.markdown("<h6 style='color: #ff9800; margin-bottom: 5px;'>🟠 Εκτός / Δώρο</h6>", unsafe_allow_html=True)
-                    is_gift = st.checkbox("Να σημειωθεί η συνεδρία εκτός αποδείξεων")
+                    st.markdown("<h6 style='color: #ff9800; margin-bottom: 5px;'>🟠 Promo / Pro Bono</h6>", unsafe_allow_html=True)
+                    is_gift = st.checkbox("Καταχώρηση ως δωρεάν παροχή (δεν τιμολογείται)")
                     
                 if is_gift:
-                    if "Εκκρεμεί" in payment_base: payment = "🟠 Εκκρεμεί (Εκτός / Δώρο)"
-                    else: payment = "🟣 Εξοφλήθηκε (Εκτός / Δώρο)"
+                    if "Εκκρεμεί" in payment_base: payment = "🟠 Εκκρεμεί (Promo / Pro Bono)"
+                    else: payment = "🟣 Ολοκληρώθηκε (Promo / Pro Bono)"
                 else:
                     payment = payment_base
                     
@@ -1228,23 +1227,23 @@ def show_client_profile():
                             df_s_upd.to_csv(DB_SESSIONS, index=False); df_c_upd.to_csv(DB_CLIENTS, index=False)
                             st.session_state[f"action_done_{index}"] = True; st.rerun()
                             
-                        if c_org.button("🟠 Αλλαγή σε Εκκρεμεί (Εκτός)", use_container_width=True):
+                        if c_org.button("🟠 Αλλαγή σε Εκκρεμεί (Promo)", use_container_width=True):
                             df_s_upd = load_sessions(); df_c_upd = load_clients()
                             for idx_s in selected_indices:
                                 status_val = str(df_s_upd.at[idx_s, "Κατάσταση Πληρωμής"])
                                 if status_val == "🔴 Εκκρεμεί":
                                     amt = float(df_s_upd.at[idx_s, "Ποσό"]); df_c_upd.at[index, 'Συνολική Οφειλή'] = max(0.0, float(df_c_upd.at[index, 'Συνολική Οφειλή']) - amt)
-                                df_s_upd.at[idx_s, "Κατάσταση Πληρωμής"] = "🟠 Εκκρεμεί (Εκτός / Δώρο)"
+                                df_s_upd.at[idx_s, "Κατάσταση Πληρωμής"] = "🟠 Εκκρεμεί (Promo / Pro Bono)"
                             df_s_upd.to_csv(DB_SESSIONS, index=False); df_c_upd.to_csv(DB_CLIENTS, index=False)
                             st.session_state[f"action_done_{index}"] = True; st.rerun()
                             
-                        if c_pur.button("🟣 Αλλαγή σε Εξοφλήθηκε (Εκτός)", use_container_width=True):
+                        if c_pur.button("🟣 Αλλαγή σε Ολοκληρώθηκε (Promo)", use_container_width=True):
                             df_s_upd = load_sessions(); df_c_upd = load_clients()
                             for idx_s in selected_indices:
                                 status_val = str(df_s_upd.at[idx_s, "Κατάσταση Πληρωμής"])
                                 if status_val == "🔴 Εκκρεμεί":
                                     amt = float(df_s_upd.at[idx_s, "Ποσό"]); df_c_upd.at[index, 'Συνολική Οφειλή'] = max(0.0, float(df_c_upd.at[index, 'Συνολική Οφειλή']) - amt)
-                                df_s_upd.at[idx_s, "Κατάσταση Πληρωμής"] = "🟣 Εξοφλήθηκε (Εκτός / Δώρο)"
+                                df_s_upd.at[idx_s, "Κατάσταση Πληρωμής"] = "🟣 Ολοκληρώθηκε (Promo / Pro Bono)"
                             df_s_upd.to_csv(DB_SESSIONS, index=False); df_c_upd.to_csv(DB_CLIENTS, index=False)
                             st.session_state[f"action_done_{index}"] = True; st.rerun()
 
@@ -1269,11 +1268,11 @@ def show_client_profile():
                 if view_mode == "📅 Ενιαία Λίστα": st.dataframe(apply_color_status(c_disp), hide_index=True, use_container_width=True)
                 else:
                     df_pend = c_disp[c_disp["Κατάσταση Πληρωμής"].str.contains("Εκκρεμεί")]
-                    df_paid = c_disp[c_disp["Κατάσταση Πληρωμής"].str.contains("Εξοφλήθηκε")]
+                    df_paid = c_disp[c_disp["Κατάσταση Πληρωμής"].str.contains("Εξοφλήθηκε|Ολοκληρώθηκε")]
                     st.markdown("🔴 **Εκκρεμούν**")
                     if df_pend.empty: st.info("Καμία εκκρεμότητα.")
                     else: st.dataframe(apply_color_status(df_pend), hide_index=True, use_container_width=True)
-                    st.markdown("🟢 **Εξοφλήθηκαν / Δωρεάν**")
+                    st.markdown("🟢 **Εξοφλήθηκαν / Promo**")
                     if df_paid.empty: st.info("Καμία εξοφλημένη συνεδρία.")
                     else: st.dataframe(apply_color_status(df_paid), hide_index=True, use_container_width=True)
 
@@ -1346,7 +1345,7 @@ def show_all_sessions_page():
                     df_s_upd.to_csv(DB_SESSIONS, index=False); df_c_upd.to_csv(DB_CLIENTS, index=False)
                     st.session_state["action_done_all"] = True; st.rerun()
 
-                if c_org.button("🟠 Αλλαγή σε Εκκρεμεί (Εκτός)", use_container_width=True):
+                if c_org.button("🟠 Αλλαγή σε Εκκρεμεί (Promo)", use_container_width=True):
                     df_s_upd = load_sessions(); df_c_upd = load_clients()
                     for idx_s in selected_indices:
                         status_val = str(df_s_upd.at[idx_s, "Κατάσταση Πληρωμής"])
@@ -1355,11 +1354,11 @@ def show_all_sessions_page():
                             if app_name in df_c_upd["Όνομα Εφαρμογής"].values:
                                 c_idx = df_c_upd.index[df_c_upd["Όνομα Εφαρμογής"] == app_name].tolist()[0]
                                 df_c_upd.at[c_idx, 'Συνολική Οφειλή'] = max(0.0, float(df_c_upd.at[c_idx, 'Συνολική Οφειλή']) - amt)
-                        df_s_upd.at[idx_s, "Κατάσταση Πληρωμής"] = "🟠 Εκκρεμεί (Εκτός / Δώρο)"
+                        df_s_upd.at[idx_s, "Κατάσταση Πληρωμής"] = "🟠 Εκκρεμεί (Promo / Pro Bono)"
                     df_s_upd.to_csv(DB_SESSIONS, index=False); df_c_upd.to_csv(DB_CLIENTS, index=False)
                     st.session_state["action_done_all"] = True; st.rerun()
 
-                if c_pur.button("🟣 Αλλαγή σε Εξοφλήθηκε (Εκτός)", use_container_width=True):
+                if c_pur.button("🟣 Αλλαγή σε Ολοκληρώθηκε (Promo)", use_container_width=True):
                     df_s_upd = load_sessions(); df_c_upd = load_clients()
                     for idx_s in selected_indices:
                         status_val = str(df_s_upd.at[idx_s, "Κατάσταση Πληρωμής"])
@@ -1368,7 +1367,7 @@ def show_all_sessions_page():
                             if app_name in df_c_upd["Όνομα Εφαρμογής"].values:
                                 c_idx = df_c_upd.index[df_c_upd["Όνομα Εφαρμογής"] == app_name].tolist()[0]
                                 df_c_upd.at[c_idx, 'Συνολική Οφειλή'] = max(0.0, float(df_c_upd.at[c_idx, 'Συνολική Οφειλή']) - amt)
-                        df_s_upd.at[idx_s, "Κατάσταση Πληρωμής"] = "🟣 Εξοφλήθηκε (Εκτός / Δώρο)"
+                        df_s_upd.at[idx_s, "Κατάσταση Πληρωμής"] = "🟣 Ολοκληρώθηκε (Promo / Pro Bono)"
                     df_s_upd.to_csv(DB_SESSIONS, index=False); df_c_upd.to_csv(DB_CLIENTS, index=False)
                     st.session_state["action_done_all"] = True; st.rerun()
 
@@ -1396,11 +1395,11 @@ def show_all_sessions_page():
         if view_opt == "📅 Ενιαία Λίστα": st.dataframe(apply_color_status(display_merged), hide_index=True, use_container_width=True)
         else:
             df_pend = display_merged[display_merged["Κατάσταση Πληρωμής"].str.contains("Εκκρεμεί")]
-            df_paid = display_merged[display_merged["Κατάσταση Πληρωμής"].str.contains("Εξοφλήθηκε")]
+            df_paid = display_merged[display_merged["Κατάσταση Πληρωμής"].str.contains("Εξοφλήθηκε|Ολοκληρώθηκε")]
             st.markdown("🔴 **Εκκρεμούν**")
             if df_pend.empty: st.info("Καμία εκκρεμότητα.")
             else: st.dataframe(apply_color_status(df_pend), hide_index=True, use_container_width=True)
-            st.markdown("🟢 **Εξοφλήθηκαν / Δωρεάν**")
+            st.markdown("🟢 **Εξοφλήθηκαν / Promo**")
             if df_paid.empty: st.info("Καμία εξοφλημένη συνεδρία.")
             else: st.dataframe(apply_color_status(df_paid), hide_index=True, use_container_width=True)
 
@@ -1498,7 +1497,7 @@ def show_statistics_page():
         df_s["Ποσό"] = df_s["Ποσό"].astype(float)
         paid_income = df_s[df_s["Κατάσταση Πληρωμής"] == "🟢 Εξοφλήθηκε"]["Ποσό"].sum()
         pending_income = df_s[df_s["Κατάσταση Πληρωμής"] == "🔴 Εκκρεμεί"]["Ποσό"].sum()
-        gift_value = df_s[df_s["Κατάσταση Πληρωμής"].str.contains("Εκτός", regex=True)]["Ποσό"].sum()
+        gift_value = df_s[df_s["Κατάσταση Πληρωμής"].str.contains("Promo", regex=True)]["Ποσό"].sum()
         total_income = paid_income + pending_income
         
     total_expenses = 0.0
@@ -1515,17 +1514,18 @@ def show_statistics_page():
     e1, e2, e3 = st.columns(3)
     e1.metric("Συνολικά Έξοδα", f"{format_money(total_expenses)} CHF")
     e2.metric("Καθαρό Κέρδος", f"{format_money(total_income - total_expenses)} CHF")
-    e3.metric("💜 Παρεχόμενη Αξία (Εκτός/Δώρο)", f"{format_money(gift_value)} CHF")
+    e3.metric("💜 Αξία Δωρεάν Παροχών (Promo)", f"{format_money(gift_value)} CHF")
     
+    # --- ΕΝΟΤΗΤΑ EXPORT ΓΙΑ ΛΟΓΙΣΤΗ ---
     st.write("---")
-    st.subheader("💾 Εξαγωγή Δεδομένων (Excel / CSV)")
+    st.subheader("💾 Εξαγωγή Δεδομένων για τον Λογιστή (Excel / CSV)")
     
     exp_lang = st.radio("Επιλογή Γλώσσας για το αρχείο:", ["Ελληνικά", "Français (Γαλλικά)"])
     
     if st.button("📥 Λήψη Εσόδων (Συνεδρίες)", use_container_width=True):
         df_export_s = load_sessions()
         if not df_export_s.empty:
-            df_export_s = df_export_s[~df_export_s["Κατάσταση Πληρωμής"].str.contains("Εκτός", regex=True, na=False)].copy()
+            df_export_s = df_export_s[~df_export_s["Κατάσταση Πληρωμής"].str.contains("Promo", regex=True, na=False)].copy()
             
             if exp_lang == "Français (Γαλλικά)":
                 df_export_s = df_export_s.rename(columns={
