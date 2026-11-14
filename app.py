@@ -207,7 +207,7 @@ def view_receipt_dialog(filepath):
         with open(filepath, "rb") as f:
             st.download_button("📥 Λήψη Αρχείου", f.read(), file_name=os.path.basename(filepath), type="primary", use_container_width=True)
 
-@st.dialog("⚠️ Επιβεβαίωση Έκδοσης Απόδειξης (Συνοπτική)")
+@st.dialog("✏️ Επεξεργασία & Έκδοση Απόδειξης")
 def confirm_issue_invoice_dialog(selected_indices, app_name, total_amt):
     df_inv = load_invoices()
     df_s = load_sessions()
@@ -218,30 +218,54 @@ def confirm_issue_invoice_dialog(selected_indices, app_name, total_amt):
         st.error("Δεν βρέθηκαν τα στοιχεία του πελάτη.")
         return
     
+    # --- 1. Φόρτωση Προεπιλεγμένων Δεδομένων ---
     parent1 = client_row.get("Όνομα Γονέα 1", "")
     parent2 = client_row.get("Όνομα Γονέα 2", "")
-    child_name = client_row.get("Όνομα Παιδιού", "")
-    address = client_row.get("Διεύθυνση", "")
+    child_name_default = client_row.get("Όνομα Παιδιού", "")
+    address_default = client_row.get("Διεύθυνση", "")
     tel1 = client_row.get("Τηλέφωνο 1", "")
     tel2 = client_row.get("Τηλέφωνο 2", "")
     email1 = client_row.get("Email 1", "")
     email2 = client_row.get("Email 2", "")
     
-    receipt_name = parent1
-    if parent2: receipt_name += f" & {parent2}"
-    if not receipt_name: receipt_name = app_name 
+    receipt_name_default = parent1
+    if parent2: receipt_name_default += f" & {parent2}"
+    if not receipt_name_default: receipt_name_default = app_name 
     
-    st.write(f"Θα εκδοθεί απόδειξη για: **{receipt_name}**")
-    st.write(f"Συνολικό Ποσό: **{format_money(total_amt)} CHF**")
+    service_name_gr = client_row.get("Υπηρεσία", "")
+    service_name_fr_default = client_row.get("Υπηρεσία Γαλλικά", "")
+    if not service_name_fr_default: service_name_fr_default = SERVICE_TRANSLATIONS.get(service_name_gr, service_name_gr)
     
+    # --- 2. Φόρμα Επεξεργασίας στο Pop-Up ---
+    st.info("Ελέγξτε και τροποποιήστε τα στοιχεία **μόνο για αυτή την απόδειξη**. Το μόνιμο προφίλ του πελάτη δεν θα επηρεαστεί.")
+    
+    edit_receipt_name = st.text_input("Όνομα / Επωνυμία στην Απόδειξη", value=receipt_name_default)
+    edit_address = st.text_input("Διεύθυνση Τιμολόγησης", value=address_default)
+    edit_child_name = st.text_input("Όνομα Παιδιού (Εμφανίζεται ως 'Concerne')", value=child_name_default)
+    
+    c_t1, c_t2 = st.columns(2)
+    with c_t1:
+        edit_tel1 = st.text_input("Τηλέφωνο 1", value=tel1)
+        edit_email1 = st.text_input("Email 1", value=email1)
+    with c_t2:
+        edit_tel2 = st.text_input("Τηλέφωνο 2", value=tel2)
+        edit_email2 = st.text_input("Email 2", value=email2)
+        
+    edit_service_fr = st.text_input("Περιγραφή Υπηρεσίας (Στα Γαλλικά)", value=service_name_fr_default)
+    
+    st.markdown(f"#### 💰 Συνολικό Ποσό: {format_money(total_amt)} CHF")
+    st.write("---")
+    
+    # --- 3. Κουμπιά Επιβεβαίωσης ---
     c1, c2 = st.columns(2)
-    if c1.button("✅ Ναι, Έκδοση", type="primary", use_container_width=True):
+    if c1.button("✅ Οριστική Έκδοση", type="primary", use_container_width=True):
         inv_num = len(df_inv) + 1
         inv_id = f"#{inv_num:03d}"
         
+        # Αποθήκευση στο Ιστορικό Αποδείξεων
         new_inv = pd.DataFrame([{
             "ID Απόδειξης": inv_id,
-            "Όνομα Απόδειξης": receipt_name,
+            "Όνομα Απόδειξης": edit_receipt_name,
             "Ημερομηνία Έκδοσης": date.today().strftime("%d/%m/%Y"),
             "Συνολικό Ποσό (CHF)": total_amt,
             "Κατάσταση": "Εκκρεμεί"
@@ -249,26 +273,24 @@ def confirm_issue_invoice_dialog(selected_indices, app_name, total_amt):
         df_inv = pd.concat([df_inv, new_inv], ignore_index=True)
         df_inv.to_csv(DB_INVOICES, index=False)
         
+        # Ενημέρωση των συνεδριών ότι συνδέθηκαν με αυτή την απόδειξη
         df_s.loc[selected_indices, "ID Απόδειξης"] = inv_id
         df_s.to_csv(DB_SESSIONS, index=False)
         
-        service_name_gr = client_row.get("Υπηρεσία", "")
-        service_name_fr = client_row.get("Υπηρεσία Γαλλικά", "")
-        if not service_name_fr: service_name_fr = SERVICE_TRANSLATIONS.get(service_name_gr, service_name_gr)
-        
+        # Δημιουργία της λίστας ημερομηνιών με τα μικρά γκρι κουτάκια
         dates_list = df_s.loc[selected_indices, "Ημερομηνία"].tolist()
         qty = len(dates_list)
-        
         dates_html = ""
         for d in dates_list:
             dates_html += f'<span style="display: inline-block; background-color: #e9ecef; border-radius: 4px; padding: 2px 6px; margin: 2px 4px 2px 0; font-size: 11px; color: #495057; border: 1px solid #dee2e6;">{d}</span>'
         
         unit_price = total_amt / qty if qty > 0 else 0
         
+        # Στήσιμο του πίνακα των υπηρεσιών (με το edit_service_fr)
         html_items = f"""
         <tr>
             <td style="border-bottom: 1px solid #eee; padding: 10px; font-size: 13px;">
-                <strong>{service_name_fr}</strong><br>
+                <strong>{edit_service_fr}</strong><br>
                 <div style="margin-top: 5px;">{dates_html}</div>
             </td>
             <td style="border-bottom: 1px solid #eee; padding: 10px; text-align: center; font-size: 13px; vertical-align: top;">{qty}</td>
@@ -279,21 +301,22 @@ def confirm_issue_invoice_dialog(selected_indices, app_name, total_amt):
             
         title_fr = "FACTURE"
         
-        addr_html = f"{address}<br>" if address else ""
+        # Χρήση των επεξεργασμένων (edit_) τιμών για τα στοιχεία επικοινωνίας
+        addr_html = f"{edit_address}<br>" if edit_address.strip() else ""
         
         contact_info = []
-        if tel1 and tel2: contact_info.append(f"Tél: {tel1} | {tel2}")
-        elif tel1: contact_info.append(f"Tél: {tel1}")
-        elif tel2: contact_info.append(f"Tél: {tel2}")
+        if edit_tel1 and edit_tel2: contact_info.append(f"Tél: {edit_tel1} | {edit_tel2}")
+        elif edit_tel1: contact_info.append(f"Tél: {edit_tel1}")
+        elif edit_tel2: contact_info.append(f"Tél: {edit_tel2}")
         
-        if email1 and email2: contact_info.append(f"Email: {email1} | {email2}")
-        elif email1: contact_info.append(f"Email: {email1}")
-        elif email2: contact_info.append(f"Email: {email2}")
+        if edit_email1 and edit_email2: contact_info.append(f"Email: {edit_email1} | {edit_email2}")
+        elif edit_email1: contact_info.append(f"Email: {edit_email1}")
+        elif edit_email2: contact_info.append(f"Email: {edit_email2}")
             
         contact_html = "<br>".join(contact_info) + "<br>" if contact_info else ""
-        
-        child_html = f"<br><em>Concerne : {child_name}</em>" if child_name.strip() else ""
+        child_html = f"<br><em>Concerne : {edit_child_name}</em>" if edit_child_name.strip() else ""
             
+        # Το τελικό Template της Απόδειξης
         html_receipt = f"""
         <!DOCTYPE html>
         <html lang="fr">
@@ -345,7 +368,7 @@ def confirm_issue_invoice_dialog(selected_indices, app_name, total_amt):
                 
                 <div class="client-box">
                     <strong>À l'attention de :</strong><br>
-                    {receipt_name}<br>
+                    {edit_receipt_name}<br>
                     {addr_html}
                     {contact_html}
                     {child_html}
@@ -404,7 +427,8 @@ def confirm_issue_invoice_dialog(selected_indices, app_name, total_amt):
         st.session_state["invoice_created_success"] = True
         st.rerun()
         
-    if c2.button("❌ Ακύρωση", use_container_width=True): st.rerun()
+    if c2.button("❌ Ακύρωση", use_container_width=True): 
+        st.rerun()
 
 @st.dialog("⚠️ Επιβεβαίωση Εξόφλησης")
 def confirm_pay_invoice_dialog(inv_id, inv_name, inv_amt):
