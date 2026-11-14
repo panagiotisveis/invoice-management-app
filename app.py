@@ -476,14 +476,18 @@ def confirm_pay_invoice_dialog(inv_id, inv_name, inv_amt):
 
 @st.dialog("ΠΡΟΣΘΗΚΗ ΣΤΟ ΠΕΛΑΤΟΛΟΓΙΟ")
 def add_client_dialog():
+    df_c = load_clients()
+    active_folders = df_c[(df_c["Κατάσταση Πελάτη"] == "Ενεργός") & (df_c["Τύπος"] == "Φάκελος")]["Όνομα Εφαρμογής"].tolist()
+    folder_options = ["- Χωρίς Φάκελο (Ιδιαίτερο) -"] + active_folders
+
     client_type = st.radio("Επιλογή:", [
-        "👤 Ενήλικας Πελάτης (Ιδιαίτερο)", 
-        "👦 Παιδί / Μαθητής (Ιδιαίτερο)", 
-        "📁 Φάκελος / Club (Ομαδικό)"
+        "👤 Ενήλικας Πελάτης", 
+        "👦 Παιδί / Μαθητής", 
+        "📁 Νέος Φάκελος / Club (Ομαδικό)"
     ])
     st.write("---")
     
-    if client_type == "📁 Φάκελος / Club (Ομαδικό)":
+    if client_type == "📁 Νέος Φάκελος / Club (Ομαδικό)":
         folder_name = st.text_input("Όνομα Φακέλου")
         
         selected_service = st.selectbox("Είδος Υπηρεσίας", ["Σχολικά Clubs", "Μαθήματα Ελληνικών", "Συμβουλευτική (SEL)", "Άλλο..."], index=0)
@@ -520,7 +524,20 @@ def add_client_dialog():
                 st.rerun()
             else: st.error("Συμπληρώστε το Όνομα Φακέλου και την Υπηρεσία.")
 
-    elif client_type == "👤 Ενήλικας Πελάτης (Ιδιαίτερο)":
+    elif client_type == "👤 Ενήλικας Πελάτης":
+        selected_folder = st.selectbox("Ένταξη σε Φάκελο / Club (Προαιρετικό)", folder_options)
+        final_folder = "" if selected_folder == folder_options[0] else selected_folder
+        final_type = "Κανονικός" if final_folder == "" else "Μαθητής"
+
+        # --- Δυναμική Ανάκτηση Τιμής & Υπηρεσίας αν επιλεγεί φάκελος ---
+        default_price = "30.0"
+        default_service_val = "Μαθήματα Ελληνικών"
+        if final_folder != "":
+            folder_row = df_c[df_c["Όνομα Εφαρμογής"] == final_folder]
+            if not folder_row.empty:
+                default_price = str(folder_row.iloc[0].get("Τιμή Συνάντησης", "30.0"))
+                default_service_val = str(folder_row.iloc[0].get("Υπηρεσία", "Μαθήματα Ελληνικών"))
+
         app_name = st.text_input("Όνομα στην Εφαρμογή")
         parent1 = st.text_input("Όνομα Πελάτη *")
         address = st.text_input("Πλήρης Διεύθυνση")
@@ -529,7 +546,11 @@ def add_client_dialog():
         with c1: tel1 = st.text_input("Τηλέφωνο 1")
         with c2: email1 = st.text_input("Email 1")
             
-        selected_service = st.selectbox("Είδος Υπηρεσίας", ["Μαθήματα Ελληνικών", "Συμβουλευτική (SEL)", "Άλλο..."], index=0)
+        # Λίστα υπηρεσιών (προσθέσαμε και τα Clubs για να μπορεί να το βρει)
+        service_list = ["Μαθήματα Ελληνικών", "Συμβουλευτική (SEL)", "Σχολικά Clubs", "Άλλο..."]
+        def_idx = service_list.index(default_service_val) if default_service_val in service_list else 0
+        
+        selected_service = st.selectbox("Είδος Υπηρεσίας", service_list, index=def_idx)
         final_service = ""
         final_service_fr = ""
         if selected_service == "Άλλο...": 
@@ -539,14 +560,14 @@ def add_client_dialog():
             final_service = selected_service
             final_service_fr = SERVICE_TRANSLATIONS.get(selected_service, selected_service)
             
-        price_str = st.text_input("Τιμή ανά Συνάντηση (CHF)", value="30.0")
+        price_str = st.text_input("Τιμή ανά Συνάντηση (CHF)", value=default_price)
         try: final_price = float(price_str.replace(",", ".")) if price_str else 0.0
         except ValueError: final_price = 0.0
         
         if st.button("✅ Προσθήκη Πελάτη", type="primary", use_container_width=True):
             if app_name and parent1 and final_service:
                 new_client = pd.DataFrame([{
-                    "Όνομα Εφαρμογής": app_name, "Τύπος": "Κανονικός", "Φάκελος": "",
+                    "Όνομα Εφαρμογής": app_name, "Τύπος": final_type, "Φάκελος": final_folder,
                     "Όνομα Παιδιού": "", "Όνομα Γονέα 1": parent1, "Όνομα Γονέα 2": "", 
                     "Διεύθυνση": address, "Τηλέφωνο 1": tel1, "Τηλέφωνο 2": "", "Email 1": email1, "Email 2": "",
                     "Τιμή Συνάντησης": final_price, "Υπηρεσία": final_service, "Υπηρεσία Γαλλικά": final_service_fr, "Σημειώσεις": "",
@@ -560,6 +581,19 @@ def add_client_dialog():
             else: st.error("⚠️ Το Όνομα Εφαρμογής, το Όνομα Πελάτη και η Υπηρεσία είναι υποχρεωτικά.")
             
     else: # 👦 Παιδί / Μαθητής
+        selected_folder = st.selectbox("Ένταξη σε Φάκελο / Club (Προαιρετικό)", folder_options)
+        final_folder = "" if selected_folder == folder_options[0] else selected_folder
+        final_type = "Κανονικός" if final_folder == "" else "Μαθητής"
+
+        # --- Δυναμική Ανάκτηση Τιμής & Υπηρεσίας αν επιλεγεί φάκελος ---
+        default_price = "30.0"
+        default_service_val = "Μαθήματα Ελληνικών"
+        if final_folder != "":
+            folder_row = df_c[df_c["Όνομα Εφαρμογής"] == final_folder]
+            if not folder_row.empty:
+                default_price = str(folder_row.iloc[0].get("Τιμή Συνάντησης", "30.0"))
+                default_service_val = str(folder_row.iloc[0].get("Υπηρεσία", "Μαθήματα Ελληνικών"))
+
         app_name = st.text_input("Όνομα στην Εφαρμογή")
         child_name = st.text_input("Όνομα Παιδιού / Μαθητή")
         
@@ -578,7 +612,10 @@ def add_client_dialog():
             email2 = st.text_input("Email 2")
             
         st.markdown("##### 💰 Υπηρεσία & Χρέωση")
-        selected_service = st.selectbox("Είδος Υπηρεσίας", ["Μαθήματα Ελληνικών", "Συμβουλευτική (SEL)", "Άλλο..."], index=0)
+        service_list = ["Μαθήματα Ελληνικών", "Συμβουλευτική (SEL)", "Σχολικά Clubs", "Άλλο..."]
+        def_idx = service_list.index(default_service_val) if default_service_val in service_list else 0
+        
+        selected_service = st.selectbox("Είδος Υπηρεσίας", service_list, index=def_idx)
         final_service = ""
         final_service_fr = ""
         if selected_service == "Άλλο...": 
@@ -588,14 +625,14 @@ def add_client_dialog():
             final_service = selected_service
             final_service_fr = SERVICE_TRANSLATIONS.get(selected_service, selected_service)
             
-        price_str = st.text_input("Τιμή ανά Συνάντηση (CHF)", value="30.0")
+        price_str = st.text_input("Τιμή ανά Συνάντηση (CHF)", value=default_price)
         try: final_price = float(price_str.replace(",", ".")) if price_str else 0.0
         except ValueError: final_price = 0.0
         
         if st.button("✅ Προσθήκη Μαθητή", type="primary", use_container_width=True):
             if app_name and parent1 and final_service:
                 new_client = pd.DataFrame([{
-                    "Όνομα Εφαρμογής": app_name, "Τύπος": "Κανονικός", "Φάκελος": "",
+                    "Όνομα Εφαρμογής": app_name, "Τύπος": final_type, "Φάκελος": final_folder,
                     "Όνομα Παιδιού": child_name, "Όνομα Γονέα 1": parent1, "Όνομα Γονέα 2": parent2, 
                     "Διεύθυνση": address, "Τηλέφωνο 1": tel1, "Τηλέφωνο 2": tel2, "Email 1": email1, "Email 2": email2,
                     "Τιμή Συνάντησης": final_price, "Υπηρεσία": final_service, "Υπηρεσία Γαλλικά": final_service_fr, "Σημειώσεις": "",
