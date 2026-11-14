@@ -7,29 +7,6 @@ from datetime import datetime, date
 st.set_page_config(page_title="Worldwide Αξεσουάρ", layout="centered")
 
 # --- CUSTOM CSS ---
-
-st.markdown("""
-<style>
-/* Απόκρυψη μενού, header και footer του Streamlit */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
-.stDeployButton {display: none !important;}
-
-/* Απόκρυψη του εικονιδίου/badge κάτω δεξιά */
-[data-testid="stStatusWidget"] {
-    display: none !important;
-}
-.viewerBadge_container__1QSob, 
-iframe[title="Streamlit status widget"] {
-    display: none !important;
-}
-footer::after {
-    display: none !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
 st.markdown("""
 <style>
 button {
@@ -152,14 +129,21 @@ if not st.session_state.authenticated:
     st.title("🔒 Είσοδος Συστήματος")
     st.write("Παρακαλώ εισάγετε τον κωδικό πρόσβασης για να συνεχίσετε.")
     
-    pwd = st.text_input("Κωδικός Πρόσβασης", type="password")
-    if st.button("Είσοδος", type="primary", use_container_width=True):
-        if pwd == st.secrets["APP_PASSWORD"]:
-            st.session_state.authenticated = True
-            st.rerun()
-        else:
-            st.error("Λάθος κωδικός πρόσβασης! Προσπαθήστε ξανά.")
-    st.stop() 
+    # Χρήση st.form για να "πιάνει" το Enter από το πληκτρολόγιο
+    with st.form("login_form"):
+        pwd = st.text_input("Κωδικός Πρόσβασης", type="password")
+        submitted = st.form_submit_button("Είσοδος", type="primary", use_container_width=True)
+        
+        if submitted:
+            try:
+                if pwd == st.secrets["APP_PASSWORD"]:
+                    st.session_state.authenticated = True
+                    st.rerun()
+                else:
+                    st.error("Λάθος κωδικός πρόσβασης! Προσπαθήστε ξανά.")
+            except KeyError:
+                st.error("⚠️ Σφάλμα: Το APP_PASSWORD δεν έχει οριστεί στα Secrets του Streamlit Cloud!")
+    st.stop()
 
 def apply_color_status(df):
     def color_rule(val):
@@ -251,7 +235,22 @@ def confirm_issue_invoice_dialog(selected_indices, app_name, total_amt):
         edit_tel2 = st.text_input("Τηλέφωνο 2", value=tel2)
         edit_email2 = st.text_input("Email 2", value=email2)
         
-    edit_service_fr = st.text_input("Περιγραφή Υπηρεσίας (Στα Γαλλικά)", value=service_name_fr_default)
+# Φτιάχνουμε μια λίστα με όλες τις διαθέσιμες γαλλικές υπηρεσίες
+    available_services_fr = list(SERVICE_TRANSLATIONS.values())
+    
+    # Αν για κάποιο λόγο η υπηρεσία του πελάτη δεν υπάρχει στη λίστα, την προσθέτουμε 
+    if service_name_fr_default not in available_services_fr:
+        available_services_fr.append(service_name_fr_default)
+        
+    # Βρίσκουμε τη σωστή προεπιλογή για τον συγκεκριμένο πελάτη
+    default_index = available_services_fr.index(service_name_fr_default)
+    
+    # Το κάνουμε Dropdown (Selectbox)
+    edit_service_fr = st.selectbox(
+        "Περιγραφή Υπηρεσίας (Στα Γαλλικά)", 
+        options=available_services_fr, 
+        index=default_index
+    )
     
     st.markdown(f"#### 💰 Συνολικό Ποσό: {format_money(total_amt)} CHF")
     st.write("---")
@@ -277,25 +276,41 @@ def confirm_issue_invoice_dialog(selected_indices, app_name, total_amt):
         df_s.loc[selected_indices, "ID Απόδειξης"] = inv_id
         df_s.to_csv(DB_SESSIONS, index=False)
         
-        # Δημιουργία της λίστας ημερομηνιών με τα μικρά γκρι κουτάκια
-        dates_list = df_s.loc[selected_indices, "Ημερομηνία"].tolist()
-        qty = len(dates_list)
+# Ανάκτηση των επιλεγμένων συνεδριών
+        selected_sessions = df_s.loc[selected_indices]
+        
+        # --- ΝΕΑ ΛΟΓΙΚΗ ΥΠΟΛΟΓΙΣΜΟΥ ΩΡΩΝ ---
+        # 1. Βρίσκουμε το βασικό ωρομίσθιο (Τιμή Συνάντησης) του πελάτη
+        try:
+            base_hourly_rate = float(client_row.get("Τιμή Συνάντησης", 0.0))
+        except ValueError:
+            base_hourly_rate = 1.0 # Ασφάλεια αν είναι κενό
+            
+        if base_hourly_rate <= 0: base_hourly_rate = 1.0 # Αποφυγή διαίρεσης με το μηδέν
+        
+        # 2. Υπολογίζουμε τις συνολικές ώρες (Συνολικό Ποσό / Ωρομίσθιο)
+        total_hours = total_amt / base_hourly_rate
+        
+        # 3. Μαζεύουμε όλες τις ημερομηνίες
+        dates_list = selected_sessions["Ημερομηνία"].tolist()
         dates_html = ""
         for d in dates_list:
             dates_html += f'<span style="display: inline-block; background-color: #e9ecef; border-radius: 4px; padding: 2px 6px; margin: 2px 4px 2px 0; font-size: 11px; color: #495057; border: 1px solid #dee2e6;">{d}</span>'
         
-        unit_price = total_amt / qty if qty > 0 else 0
-        
-        # Στήσιμο του πίνακα των υπηρεσιών (με το edit_service_fr)
+        # 4. Στήσιμο του πίνακα με μία ενιαία καταχώρηση
         html_items = f"""
         <tr>
-            <td style="border-bottom: 1px solid #eee; padding: 10px; font-size: 13px;">
-                <strong>{edit_service_fr}</strong><br>
-                <div style="margin-top: 5px;">{dates_html}</div>
+            <td colspan="4" style="border-bottom: none; padding: 12px 10px 4px 10px; font-size: 14px;">
+                <strong>{edit_service_fr}</strong>
             </td>
-            <td style="border-bottom: 1px solid #eee; padding: 10px; text-align: center; font-size: 13px; vertical-align: top;">{qty}</td>
-            <td style="border-bottom: 1px solid #eee; padding: 10px; text-align: right; font-size: 13px; vertical-align: top;">{format_money(unit_price)}</td>
-            <td style="border-bottom: 1px solid #eee; padding: 10px; text-align: right; font-size: 13px; vertical-align: top;"><strong>{format_money(total_amt)}</strong></td>
+        </tr>
+        <tr>
+            <td style="border-bottom: 1px solid #eee; padding: 4px 10px 12px 10px; font-size: 13px;">
+                {dates_html}
+            </td>
+            <td style="border-bottom: 1px solid #eee; padding: 4px 10px 12px 10px; text-align: center; font-size: 13px; vertical-align: middle;">{total_hours:g}</td>
+            <td style="border-bottom: 1px solid #eee; padding: 4px 10px 12px 10px; text-align: right; font-size: 13px; vertical-align: middle;">{format_money(base_hourly_rate)}</td>
+            <td style="border-bottom: 1px solid #eee; padding: 4px 10px 12px 10px; text-align: right; font-size: 13px; vertical-align: middle;"><strong>{format_money(total_amt)}</strong></td>
         </tr>
         """
             
@@ -642,7 +657,7 @@ def quick_add_session_dialog():
         df_active = df_c[(df_c["Κατάσταση Πελάτη"] == "Ενεργός") & (df_c["Τύπος"] == "Κανονικός")]
         
         if df_active.empty:
-            st.warning("Δεν υπάρχουν ενεργοί μεμονωμένοι πελάτες.")
+            st.warning("Δεν υπάρχουν ενεργοί μεμονωμένο πελάτες.")
             return
             
         client_names = df_active['Όνομα Εφαρμογής'].tolist()
